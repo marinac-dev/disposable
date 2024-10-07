@@ -3,7 +3,7 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/disposable.svg)](https://hex.pm/packages/disposable)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-brightgreen.svg)](https://hexdocs.pm/disposable)
 
-Disposable is an Elixir library for checking if an email address is from a disposable email service. It provides a fast, memory-efficient way to validate email domains against a known list of disposable email providers.
+Disposable is an Elixir library for checking if an email address is from a disposable email service. It provides a fast, memory-efficient way to validate email domains against a known list of disposable email providers. With over 169.000 domains in the list, Disposable is a reliable tool for preventing users from signing up with temporary email addresses.
 
 ## Features
 
@@ -19,7 +19,7 @@ The package can be installed by adding `disposable` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:disposable, "~> 0.1.0"}
+    {:disposable, "~> 0.1.3"}
   ]
 end
 ```
