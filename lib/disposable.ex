@@ -1,6 +1,8 @@
 defmodule Disposable do
   use Agent
 
+  require Logger
+
   @moduledoc """
   Checks if an email address is from a disposable email service.
   Uses an Agent to keep domains in memory for faster checking.
@@ -23,15 +25,25 @@ defmodule Disposable do
 
   """
   def check(email) do
-    domain = get_domain(email)
-    Agent.get(__MODULE__, &MapSet.member?(&1, domain))
+    if Process.whereis(__MODULE__) do
+      domain = get_domain(email)
+
+      if domain do
+        Agent.get(__MODULE__, &MapSet.member?(&1, domain))
+      else
+        false
+      end
+    else
+      Logger.error("Disposable E-mail Agent is not running.")
+      false
+    end
   end
 
   defp get_domain(email) do
-    email
-    |> String.split("@")
-    |> List.last()
-    |> String.downcase()
+    case String.split(email, "@") do
+      [_local_part, domain] -> String.downcase(domain)
+      _ -> nil
+    end
   end
 
   defp load_domains do
@@ -42,11 +54,11 @@ defmodule Disposable do
   end
 
   defp domains_file do
+    default_path = Application.app_dir(:disposable, "priv/domains.txt")
+
     case Application.get_env(:disposable, :disposable_domains_file) do
-      nil ->
-        Application.app_dir(:disposable, "priv/domains.txt")
-      path ->
-        if File.exists?(path), do: path, else: Application.app_dir(:disposable, "priv/domains.txt")
+      nil -> default_path
+      path -> if File.exists?(path), do: path, else: default_path
     end
   end
 
