@@ -28,7 +28,7 @@ defmodule Disposable.MixProject do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.34.2"}
+      {:ex_doc, "~> 0.34.2", only: :dev, runtime: false}
     ]
   end
 
@@ -38,6 +38,7 @@ defmodule Disposable.MixProject do
 
   defp package do
     [
+      name: "disposable",
       files: ["lib", "mix.exs", "README.md", "LICENSE.md", "priv/domains.txt"],
       maintainers: ["Your Name"],
       licenses: ["MIT"],
