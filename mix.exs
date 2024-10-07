@@ -1,7 +1,7 @@
 defmodule Disposable.MixProject do
   use Mix.Project
 
-  @version "0.1.1"
+  @version "0.1.2"
   @source_url "https://github.com/marinac-dev/disposable"
 
   def project do
