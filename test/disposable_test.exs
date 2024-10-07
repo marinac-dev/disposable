@@ -41,7 +41,7 @@ defmodule DisposableTest do
     Disposable.reload()
 
     new_result = Disposable.check("user@newdisposable.com")
-    assert new_result != original_result
+    refute new_result == original_result
 
     # Clean up: remove the added domain
     remove_domain_from_file("newdisposable.com")
