@@ -1,7 +1,7 @@
 defmodule Disposable.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @source_url "https://github.com/marinac-dev/disposable"
 
   def project do
@@ -49,7 +49,7 @@ defmodule Disposable.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "LICENSE.md"],
       source_url: @source_url,
       source_ref: "v#{@version}"
     ]
