@@ -5,12 +5,17 @@
 
 Disposable is an Elixir library for checking if an email address is from a disposable email service. It provides a fast, memory-efficient way to validate email domains against a known list of disposable email providers. With over 169.000 domains in the list, Disposable is a reliable tool for preventing users from signing up with temporary email addresses.
 
+## Note
+
+- Requires Elixir 1.18 or later
+
 ## Features
 
 - Fast in-memory checking of email domains
 - Easy to use API
 - Configurable disposable domains list
 - Ability to reload domains without application restart
+- Built-in list of 169.000+ disposable email domains
 
 ## Installation
 
@@ -19,7 +24,7 @@ The package can be installed by adding `disposable` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:disposable, "~> 0.1.3"}
+    {:disposable, "~> 0.1.4"}
   ]
 end
 ```
