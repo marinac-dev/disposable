@@ -1,121 +1,95 @@
 defmodule Disposable do
   @moduledoc """
-  Provides functionality to check if an email address belongs to a disposable email service.
-  Uses an Agent process to maintain an in-memory cache of disposable domains for efficient lookups.
+  Checks whether an email address uses a disposable domain.
+
+  Email handling is intentionally limited validation: the value must be a
+  printable UTF-8 string with one non-empty local part and a valid ASCII domain.
+  This module does not implement complete RFC 5322 parsing.
   """
 
-  use Agent
-  require Logger
-
-  @typedoc "A disposable email"
+  @typedoc "An email address represented as a UTF-8 string."
   @type email :: String.t()
-  @typedoc "A disposable domain name"
+  @typedoc "A disposable domain name represented as a UTF-8 string."
   @type domain :: String.t()
 
-  @doc """
-  Starts the Disposable domain cache Agent.
+  @doc "Starts the ETS-backed domain store registered as `Disposable`."
+  @deprecated "the application starts the store automatically"
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(opts \\ []) do
+    Disposable.Store.start_link(opts)
+  end
 
-  The Agent is registered under the current module name and initialized with
-  domains loaded from the configured file path.
-  """
-  @spec start_link(keyword()) :: Agent.on_start()
-  def start_link(_opts) do
-    Agent.start_link(&load_domains/0, name: __MODULE__)
+  @doc false
+  def child_spec(opts) do
+    Disposable.Store.child_spec(opts)
+    |> Map.put(:id, __MODULE__)
+    |> Map.put(:start, {__MODULE__, :start_link, [opts]})
   end
 
   @doc """
-  Checks if an email address belongs to a disposable email service.
+  Looks up an email address without collapsing errors.
 
-  Returns `false` if the email is invalid or if the Agent process is not running.
-
-  ## Examples
-
-      iex> Disposable.check("user@example.com")
-      false
-
-      iex> Disposable.check("test@alltempmail.com")
-      true
+  Returns `{:ok, boolean()}` for valid input, or `{:error, reason}` for
+  `:invalid_email` and `:not_running`.
   """
-  @spec check(email()) :: boolean() | {:error, :not_running} | {:error, :invalid_email} | no_return()
-  def check(email) when is_binary(email) do
-    with {:ok, pid} <- ensure_running(),
-         {:ok, domain} <- extract_domain(email) do
-      Agent.get(pid, &MapSet.member?(&1, domain))
+  @spec lookup(term()) :: {:ok, boolean()} | {:error, :invalid_email | :not_running}
+  def lookup(email) do
+    with {:ok, domain} <- extract_domain(email),
+         {:ok, result} <- Disposable.Store.lookup(domain) do
+      {:ok, result}
     else
-      {:error, :not_running} ->
-        Logger.error("Disposable email Agent is not running")
-        raise Disposable.Exception, message: "Disposable email Agent is not running"
-
-      {:error, :invalid_email} ->
-        false
+      :error -> {:error, :invalid_email}
+      {:error, reason} -> {:error, reason}
     end
   end
+
+  @doc "Returns `true` only for a valid email whose exact domain is listed."
+  @spec disposable?(term()) :: boolean()
+  def disposable?(email) do
+    match?({:ok, true}, lookup(email))
+  end
+
+  @deprecated "use disposable?/1 instead"
+  @doc "Compatibility alias for `disposable?/1`; invalid and unavailable lookups return `false`."
+  @spec check(term()) :: boolean()
+  def check(email), do: disposable?(email)
+
+  @doc "Reloads the configured source, preserving the active generation on failure."
+  @deprecated "use the configured source and an administrator-controlled refresh operation"
+  @spec reload() :: :ok | {:error, term()}
+  def reload, do: Disposable.Store.reload()
 
   @doc """
-  Reloads the disposable domains from the configured file into memory.
+  Loads a newline-delimited domain list from an administrator-controlled URL.
 
-  Useful for updating the domain list without restarting the application.
+  Redirects, non-200 responses, invalid content, and transport failures leave
+  the active generation unchanged.
   """
-  @spec reload() :: :ok
-  def reload do
-    data = load_domains()
-    Agent.update(__MODULE__, fn _state -> data end)
-  end
+  @spec load_url(String.t()) :: :ok | {:error, term()}
+  def load_url(url), do: Disposable.Store.load_url(url)
 
-  @doc """
-  Load domains from a URL into memory.
-  """
-  def load_url(url) do
-    case Disposable.Http.get(url) do
-      {:ok, 200, _headers, body} ->
-        data = to_string(body) |> String.split("\n")
+  @doc false
+  @spec extract_domain(term()) :: {:ok, domain()} | :error
+  def extract_domain(email) when is_binary(email) do
+    if String.valid?(email) and String.printable?(email) and not Regex.match?(~r/\s/u, email) do
+      case String.split(email, "@") do
+        [local_part, domain] when local_part != "" and domain != "" ->
+          domain = String.downcase(domain)
 
-        parsed =
-          data
-          |> Stream.map(&String.trim/1)
-          |> MapSet.new()
+          if String.trim(local_part) == local_part and String.trim(domain) == domain and
+               Disposable.Source.valid_domain?(domain) do
+            {:ok, domain}
+          else
+            :error
+          end
 
-        Agent.update(__MODULE__, fn _state -> parsed end)
+        _invalid ->
+          :error
+      end
+    else
+      :error
     end
   end
 
-  # Private Functions
-
-  @spec ensure_running() :: {:ok, pid()} | {:error, :not_running}
-  defp ensure_running do
-    case Process.whereis(__MODULE__) do
-      pid when is_pid(pid) -> {:ok, pid}
-      nil -> {:error, :not_running}
-    end
-  end
-
-  @spec extract_domain(email()) :: {:ok, domain()} | {:error, :invalid_email}
-  defp extract_domain(email) do
-    case String.split(email, "@") do
-      [_local_part, domain] -> {:ok, String.downcase(domain)}
-      _invalid -> {:error, :invalid_email}
-    end
-  end
-
-  @spec load_domains() :: MapSet.t()
-  defp load_domains do
-    domains_file()
-    |> File.stream!()
-    |> Stream.map(&String.trim/1)
-    |> MapSet.new()
-  end
-
-  @spec domains_file() :: String.t()
-  defp domains_file do
-    default_path = Application.app_dir(:disposable, "priv/domains.txt")
-
-    Application.get_env(:disposable, :disposable_domains_file)
-    |> determine_file_path(default_path)
-  end
-
-  @spec determine_file_path(String.t() | nil, String.t()) :: String.t()
-  defp determine_file_path(nil, default_path), do: default_path
-
-  defp determine_file_path(path, default_path),
-    do: if(File.exists?(path), do: path, else: default_path)
+  def extract_domain(_email), do: :error
 end
