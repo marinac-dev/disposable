@@ -201,6 +201,23 @@ defmodule DisposableIntegrationTest do
     assert {:ok, 200, _headers, "part"} = Disposable.Http.fetch(url)
   end
 
+  test "status/0 reports a refresh in progress without blocking" do
+    url = start_http_server(200, "remote-status.test\n", notify: self(), response_delay: 100)
+    {:ok, before} = Disposable.status()
+
+    load_task = Task.async(fn -> Disposable.load_url(url) end)
+    assert_receive :http_request_received, 1_000
+
+    assert {:ok, %{state: :refreshing} = refreshing} = Disposable.status()
+    assert refreshing.generation == before.generation
+    assert Disposable.disposable?("user@alltempmail.com")
+
+    assert :ok = Task.await(load_task, 2_000)
+
+    assert {:ok, %{state: :ready, source: {:url, ^url}, domain_count: 1} = loaded} = Disposable.status()
+    assert loaded.generation == before.generation + 1
+  end
+
   defp restore_domains_file(nil), do: Application.delete_env(:disposable, :disposable_domains_file)
 
   defp restore_domains_file(path),

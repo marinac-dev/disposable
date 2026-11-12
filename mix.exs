@@ -12,16 +12,21 @@ defmodule Disposable.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      preferred_cli_env: [
-        "test.unit": :test,
-        "test.integration": :test,
-        check: :test
-      ],
       description: description(),
       package: package(),
       docs: docs(),
       name: "Disposable",
       source_url: @source_url
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        "test.unit": :test,
+        "test.integration": :test,
+        check: :test
+      ]
     ]
   end
 

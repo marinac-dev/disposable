@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `Disposable.status/0` reports the store lifecycle: `:ready` or `:refreshing`,
+  the active generation, its source and size, and the last failed refresh.
+
+### Changed
+
+- `Disposable.reload/0` is no longer deprecated. It is the only way to re-read
+  the configured source at runtime and had no replacement.
+
+### Fixed
+
+- `mix.exs` declares preferred environments in `cli/0`, removing the
+  `:preferred_cli_env` deprecation warning on newer Elixir releases.
+
 ## 0.2.0
 
 ### Added

@@ -18,6 +18,7 @@ and provides fast, in-memory lookups.
 - Structured results for valid and invalid email addresses
 - Bundled, file, and URL domain sources
 - Atomic domain refreshes without restarting the application
+- Non-blocking store status: active source, generation, and last refresh error
 - Bounded administrator-controlled URL loading
 
 ## Installation
@@ -95,8 +96,7 @@ Reload the configured source without restarting the application:
 Disposable.reload()
 ```
 
-`reload/0` is retained as a deprecated compatibility API. It returns `:ok` or
-`{:error, reason}`, and a failed refresh leaves the current list unchanged.
+`reload/0` returns `:ok` or `{:error, reason}`, and a failed refresh leaves the current list unchanged.
 
 For an administrator-controlled URL refresh, use:
 
@@ -107,6 +107,27 @@ Disposable.load_url("https://example.com/disposable-domains.txt")
 URL requests do not follow redirects or retries and are bounded by the
 configured timeouts and response-size limit. Failed requests do not replace the
 active list.
+
+## Store status
+
+`Disposable.status/0` reports which list is active and whether a refresh is in
+progress or has failed. It never blocks, including while a URL is loading:
+
+```elixir
+iex> Disposable.status()
+{:ok,
+ %{
+   state: :ready,
+   generation: 1,
+   domain_count: 169267,
+   source: :bundled,
+   loaded_at: ~U[2026-11-12 16:30:31.044887Z],
+   last_error: nil
+ }}
+```
+
+`state` is `:ready`, or `:refreshing` while `reload/0` or `load_url/1` is loading a replacement; lookups keep using the active generation throughout. `generation` increases with every published replacement. After a failed refresh, `last_error` holds `%{at: datetime, source: source, reason: reason}` until the next successful one. URL sources are reported without credentials, query, or fragment. 
+A stopped store returns `{:error, :not_running}`.
 
 ## Development
 

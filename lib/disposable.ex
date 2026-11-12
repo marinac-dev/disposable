@@ -54,8 +54,12 @@ defmodule Disposable do
   @spec check(term()) :: boolean()
   def check(email), do: disposable?(email)
 
-  @doc "Reloads the configured source, preserving the active generation on failure."
-  @deprecated "use the configured source and an administrator-controlled refresh operation"
+  @doc """
+  Reloads the configured source without restarting the application.
+
+  Returns `:ok` or `{:error, reason}`. A failed reload leaves the active
+  generation unchanged and is recorded in `status/0`.
+  """
   @spec reload() :: :ok | {:error, term()}
   def reload, do: Disposable.Store.reload()
 
@@ -67,6 +71,34 @@ defmodule Disposable do
   """
   @spec load_url(String.t()) :: :ok | {:error, term()}
   def load_url(url), do: Disposable.Store.load_url(url)
+
+  @doc """
+  Reports the lifecycle state of the domain store.
+
+  Returns `{:ok, status}` while the store is running, or
+  `{:error, :not_running}`. The read never blocks, including during a refresh.
+
+      iex> {:ok, status} = Disposable.status()
+      iex> status.state
+      :ready
+      iex> status.domain_count > 0
+      true
+
+  The status map contains:
+
+    * `:state` - `:ready`, or `:refreshing` while `reload/0` or `load_url/1`
+      is loading a replacement; lookups keep using the active generation
+    * `:generation` - starts at 1 and increases with every published replacement
+    * `:domain_count` - number of domains in the active generation
+    * `:source` - where the active generation came from, such as `:bundled`,
+      `{:file, path}`, or `{:url, url}`; URLs are reported without
+      credentials, query, or fragment
+    * `:loaded_at` - `DateTime` at which the active generation was published
+    * `:last_error` - `nil`, or `%{at: DateTime.t(), source: term(), reason: term()}`
+      for the most recent failed refresh since `:loaded_at`
+  """
+  @spec status() :: {:ok, Disposable.Store.status()} | {:error, :not_running}
+  def status, do: Disposable.Store.status()
 
   @doc false
   @spec extract_domain(term()) :: {:ok, domain()} | :error

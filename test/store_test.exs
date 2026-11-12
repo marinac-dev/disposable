@@ -70,6 +70,53 @@ defmodule Disposable.StoreTest do
     :ets.delete(active_table)
   end
 
+  test "status/0 reports the ready generation and advances on replacement" do
+    assert {:ok, %{state: :ready, last_error: nil} = before} = Disposable.status()
+    assert before.generation >= 1
+    assert before.domain_count > 0
+    assert %DateTime{} = before.loaded_at
+
+    assert :ok = Disposable.Store.replace(MapSet.new(["status-a.test", "status-b.test"]))
+
+    assert {:ok, %{state: :ready, source: :manual, domain_count: 2, last_error: nil} = replaced} =
+             Disposable.status()
+
+    assert replaced.generation == before.generation + 1
+  end
+
+  test "status/0 records a failed refresh without advancing the generation" do
+    {:ok, before} = Disposable.status()
+
+    assert {:error, :invalid_domain} = Disposable.Store.replace(MapSet.new(["invalid domain"]))
+
+    assert {:ok, %{state: :ready, last_error: %{source: :manual, reason: :invalid_domain, at: %DateTime{}}} = failed} =
+             Disposable.status()
+
+    assert Map.delete(failed, :last_error) == Map.delete(before, :last_error)
+
+    assert :ok = Disposable.Store.replace(MapSet.new(["status-recovered.test"]))
+    assert {:ok, %{last_error: nil}} = Disposable.status()
+  end
+
+  test "status/0 keeps credentials and query strings out of URL sources" do
+    assert {:error, {:transport, _reason}} =
+             Disposable.load_url("http://user:secret@127.0.0.1:1/domains.txt?token=secret#top")
+
+    assert {:ok, %{state: :ready, last_error: %{source: {:url, "http://127.0.0.1:1/domains.txt"}}}} =
+             Disposable.status()
+  end
+
+  test "status/0 returns not_running while the registration is absent" do
+    store = Process.whereis(Disposable)
+    assert Process.unregister(Disposable)
+
+    try do
+      assert {:error, :not_running} = Disposable.status()
+    after
+      Process.register(store, Disposable)
+    end
+  end
+
   test "failed replacement preserves the active generation" do
     domains = MapSet.new(["store-old.test"])
     assert :ok = Disposable.Store.replace(domains)
