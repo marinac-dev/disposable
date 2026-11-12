@@ -3,70 +3,130 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/disposable.svg)](https://hex.pm/packages/disposable)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-brightgreen.svg)](https://hexdocs.pm/disposable)
 
-Disposable is an Elixir library for checking if an email address is from a disposable email service. It provides a fast, memory-efficient way to validate email domains against a known list of disposable email providers. With over 169.000 domains in the list, Disposable is a reliable tool for preventing users from signing up with temporary email addresses.
+Disposable is an Elixir library for checking whether an email address uses a
+disposable email service. It ships with a curated list of disposable domains
+and provides fast, in-memory lookups.
+
+## Requirements
+
+- Elixir 1.18 or later
+- OTP compatible with the selected Elixir release
 
 ## Features
 
-- Fast in-memory checking of email domains
-- Easy to use API
-- Configurable disposable domains list
-- Ability to reload domains without application restart
+- Fast, case-insensitive email-domain lookups
+- Structured results for valid and invalid email addresses
+- Bundled, file, and URL domain sources
+- Atomic domain refreshes without restarting the application
+- Bounded administrator-controlled URL loading
 
 ## Installation
 
-The package can be installed by adding `disposable` to your list of dependencies in `mix.exs`:
+Add `disposable` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:disposable, "~> 0.1.3"}
+    {:disposable, "~> 0.2.0"}
   ]
 end
 ```
+
+The application starts its domain store automatically.
 
 ## Usage
 
 ### Basic usage
 
 ```elixir
-iex> Disposable.check("user@gmail.com")
-false
-
-iex> Disposable.check("user@tempmail.com")
+iex> Disposable.disposable?("user@alltempmail.com")
 true
+
+iex> Disposable.disposable?("user@gmail.com")
+false
 ```
 
-### Configuration
-
-By default, Disposable uses a built-in list of disposable email domains. You can provide your own list by setting the `:disposable_domains_file` configuration in your `config.exs`:
+Use `lookup/1` when the reason for a negative result matters:
 
 ```elixir
-config :disposable, disposable_domains_file: "/path/to/your/domains.txt"
+case Disposable.lookup(email) do
+  {:ok, true} -> :disposable
+  {:ok, false} -> :accepted
+  {:error, :invalid_email} -> :invalid
+  {:error, :not_running} -> :retry_later
+end
 ```
 
-### Reloading domains
+`disposable?/1` returns `false` for invalid input or an unavailable store.
+`check/1` is retained as a deprecated compatibility alias.
 
-If you update your domains list, you can reload it without restarting your application:
+Domain matching is exact and case-insensitive. Email validation is intentionally
+limited rather than full RFC 5322 validation; ASCII domains and ASCII punycode
+labels are accepted, but Unicode labels are not converted to IDNA.
+
+## Configuration
+
+The bundled list is used by default. Configure a bundled, file, or URL source
+in `config.exs`:
+
+```elixir
+config :disposable,
+  source: {:file, "/path/to/your/domains.txt"},
+  url_options: [
+    timeout: 15_000,
+    max_body_bytes: 5 * 1024 * 1024
+  ]
+```
+
+Supported sources are `:bundled`, `{:file, path}`, and `{:url, url}`. The
+default source performs no network access at startup. The older
+`:disposable_domains_file` setting is supported for compatibility, but
+`:source` takes precedence when both are configured.
+
+Domain files are UTF-8, one domain per line. Blank lines and lines beginning
+with `#` are ignored. Values are trimmed, lowercased, deduplicated, and
+validated. CRLF input is supported.
+
+## Refreshing
+
+Reload the configured source without restarting the application:
 
 ```elixir
 Disposable.reload()
 ```
 
-## Contributing
+`reload/0` is retained as a deprecated compatibility API. It returns `:ok` or
+`{:error, reason}`, and a failed refresh leaves the current list unchanged.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+For an administrator-controlled URL refresh, use:
 
-1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+```elixir
+Disposable.load_url("https://example.com/disposable-domains.txt")
+```
+
+URL requests do not follow redirects or retries and are bounded by the
+configured timeouts and response-size limit. Failed requests do not replace the
+active list.
+
+## Development
+
+```bash
+mix test
+mix test.unit
+mix test.integration
+mix check
+```
+
+## Data
+
+The bundled list contains 169,267 domains at this revision. It is not a
+guarantee that every disposable provider is included.
+
+## Migration
+
+See [Migrating to 0.2](guides/migrating-to-0.2.md) for the API and configuration
+changes from 0.1.x.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-
-## Acknowledgments
-
-- Thanks to all contributors who have helped with this project.
-- Special thanks to the maintainers of various disposable email domain lists that helped in creating our initial list.
+This project is licensed under the [MIT License](LICENSE.md).
